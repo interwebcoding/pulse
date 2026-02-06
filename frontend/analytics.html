@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Analytics - pulse</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #f9fafb;
+        min-height: 100vh;
+      }
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 256px;
+        background: white;
+        border-right: 1px solid #e5e7eb;
+        padding: 24px 16px;
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 16px 24px;
+        border-bottom: 1px solid #f3f4f6;
+        margin-bottom: 24px;
+      }
+      .logo-icon { font-size: 32px; }
+      .logo-text { font-size: 24px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        color: #4b5563;
+        text-decoration: none;
+        margin-bottom: 4px;
+        transition: all 0.15s;
+      }
+      .nav-item:hover { background: #f3f4f6; color: #1f2937; }
+      .nav-item.active { background: #eff6ff; color: #0284c7; font-weight: 500; }
+      .nav-icon { width: 20px; height: 20px; }
+      
+      .main { margin-left: 256px; padding: 32px; }
+      h1 { font-size: 28px; color: #111827; margin-bottom: 8px; }
+      .subtitle { color: #6b7280; margin-bottom: 32px; }
+      
+      .site-selector {
+        background: white;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .site-selector label { font-size: 14px; font-weight: 500; color: #374151; }
+      .site-selector select {
+        flex: 1;
+        padding: 10px 16px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 14px;
+        max-width: 400px;
+      }
+      
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 20px;
+        margin-bottom: 32px;
+      }
+      .stat-card {
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        border: 1px solid #f3f4f6;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      }
+      .stat-label { font-size: 14px; color: #6b7280; margin-bottom: 8px; }
+      .stat-value { font-size: 28px; font-weight: 700; color: #111827; }
+      .stat-change { font-size: 13px; margin-top: 8px; }
+      .stat-change.positive { color: #16a34a; }
+      .stat-change.negative { color: #dc2626; }
+      
+      .card {
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        border: 1px solid #f3f4f6;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        margin-bottom: 24px;
+      }
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .card-title { font-size: 18px; font-weight: 600; color: #111827; }
+      
+      .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+      .tab {
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        background: none;
+        border: none;
+        color: #6b7280;
+      }
+      .tab:hover { background: #f3f4f6; }
+      .tab.active { background: #eff6ff; color: #0284c7; }
+      
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f3f4f6; }
+      th { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; }
+      td { font-size: 14px; color: #374151; }
+      tr:hover td { background: #f9fafb; }
+      
+      .loading { text-align: center; padding: 40px; color: #6b7280; }
+      .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #0284c7;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 12px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      
+      .chart-container {
+        height: 200px;
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        padding: 20px 0;
+      }
+      .chart-bar {
+        flex: 1;
+        background: linear-gradient(to top, #0284c7, #38bdf8);
+        border-radius: 4px 4px 0 0;
+        min-height: 10px;
+        transition: all 0.3s;
+      }
+      .chart-bar:hover { opacity: 0.8; }
+      
+      .user-info {
+        position: absolute;
+        bottom: 24px;
+        left: 16px;
+        right: 16px;
+        padding-top: 20px;
+        border-top: 1px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #0284c7, #38bdf8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+      }
+      .user-name { font-size: 14px; font-weight: 500; color: #111827; }
+      .user-email { font-size: 12px; color: #6b7280; }
+      .logout { margin-left: auto; color: #6b7280; text-decoration: none; font-size: 13px; }
+      .logout:hover { color: #dc2626; }
+    </style>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-icon">📊</span>
+        <span class="logo-text">pulse</span>
+      </div>
+      
+      <nav>
+        <a href="/dashboard.html" class="nav-item">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          Dashboard
+        </a>
+        <a href="/sites.html" class="nav-item">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+          Sites
+        </a>
+        <a href="/analytics.html" class="nav-item active">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Analytics
+        </a>
+        <a href="/searchconsole.html" class="nav-item">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          Search Console
+        </a>
+        <a href="/settings.html" class="nav-item">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Settings
+        </a>
+      </nav>
+      
+      <div class="user-info">
+        <div class="avatar" id="avatar">D</div>
+        <div>
+          <div class="user-name" id="userName">User</div>
+          <div class="user-email" id="userEmail">user@example.com</div>
+        </div>
+        <a href="http://localhost:3000/api/auth/logout" class="logout">Sign out</a>
+      </div>
+    </aside>
+    
+    <main class="main">
+      <h1>Analytics</h1>
+      <p class="subtitle">Google Analytics 4 data and insights</p>
+      
+      <div class="site-selector">
+        <label>Select Site:</label>
+        <select id="siteSelect" onchange="loadSiteData()">
+          <option value="">Loading sites...</option>
+        </select>
+      </div>
+      
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('overview')">Overview</button>
+        <button class="tab" onclick="switchTab('sources')">Traffic Sources</button>
+        <button class="tab" onclick="switchTab('pages')">Top Pages</button>
+      </div>
+      
+      <div id="content">
+        <div class="loading"><div class="spinner"></div>Loading analytics...</div>
+      </div>
+    </main>
+    
+    <script>
+      const API_URL = 'http://localhost:3000/api';
+      let sites = [];
+      let currentSiteId = null;
+      let currentTab = 'overview';
+      
+      async function loadUser() {
+        const res = await fetch(API_URL + '/auth/me', { credentials: 'include' });
+        const data = await res.json();
+        if (!data.authenticated) {
+          window.location.href = '/';
+          return;
+        }
+        document.getElementById('userName').textContent = data.user.name;
+        document.getElementById('userEmail').textContent = data.user.email;
+        document.getElementById('avatar').textContent = data.user.name?.[0] || 'U';
+      }
+      
+      async function loadSites() {
+        const res = await fetch(API_URL + '/sites', { credentials: 'include' });
+        const data = await res.json();
+        sites = data.sites || [];
+        
+        const select = document.getElementById('siteSelect');
+        select.innerHTML = sites.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        
+        if (sites.length > 0) {
+          currentSiteId = sites[0].id;
+          loadSiteData();
+        }
+      }
+      
+      function switchTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+        loadSiteData();
+      }
+      
+      async function loadSiteData() {
+        currentSiteId = document.getElementById('siteSelect').value;
+        if (!currentSiteId) return;
+        
+        const container = document.getElementById('content');
+        
+        if (currentTab === 'overview') {
+          const res = await fetch(API_URL + '/analytics/site/' + currentSiteId, { credentials: 'include' });
+          const data = await res.json();
+          
+          container.innerHTML = `
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">Users (30 days)</div>
+                <div class="stat-value">${data.totals?.total_users?.toLocaleString() || 0}</div>
+                <div class="stat-change positive">↑ 12% vs last period</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Sessions (30 days)</div>
+                <div class="stat-value">${data.totals?.total_sessions?.toLocaleString() || 0}</div>
+                <div class="stat-change positive">↑ 8% vs last period</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Page Views (30 days)</div>
+                <div class="stat-value">${data.totals?.total_pageviews?.toLocaleString() || 0}</div>
+                <div class="stat-change positive">↑ 15% vs last period</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Avg. Duration</div>
+                <div class="stat-value">${data.totals?.avg_session_duration || 0}s</div>
+                <div class="stat-change positive">↑ 5% vs last period</div>
+              </div>
+            </div>
+            
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">Page Views (Last 7 Days)</h2>
+              </div>
+              <div class="chart-container" id="chart"></div>
+            </div>
+          `;
+          
+          // Render chart
+          if (data.dailyData && data.dailyData.length > 0) {
+            const maxValue = Math.max(...data.dailyData.map(d => d.pageviews || 0));
+            const chart = document.getElementById('chart');
+            chart.innerHTML = data.dailyData.map(day => {
+              const height = ((day.pageviews || 0) / maxValue * 100).toFixed(1);
+              return `<div class="chart-bar" style="height: ${height}%" title="${day.date}: ${day.pageviews} views"></div>`;
+            }).join('');
+          }
+        } else if (currentTab === 'sources') {
+          const res = await fetch(API_URL + '/analytics/sources/' + currentSiteId, { credentials: 'include' });
+          const data = await res.json();
+          
+          container.innerHTML = `
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">Traffic Sources</h2>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Source / Medium</th>
+                    <th>Sessions</th>
+                    <th>Percentage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${data.data?.map(s => `
+                    <tr>
+                      <td><strong>${s.source} / ${s.medium}</strong></td>
+                      <td>${s.sessions.toLocaleString()}</td>
+                      <td>${s.percentage}%</td>
+                    </tr>
+                  `).join('') || '<tr><td colspan="3" class="loading">No data</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } else {
+          const res = await fetch(API_URL + '/analytics/pages/' + currentSiteId + '?limit=20', { credentials: 'include' });
+          const data = await res.json();
+          
+          container.innerHTML = `
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">Top Pages</h2>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Page</th>
+                    <th>Title</th>
+                    <th>Views</th>
+                    <th>Unique Views</th>
+                    <th>Avg. Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${data.data?.map(p => `
+                    <tr>
+                      <td><strong>${p.page}</strong></td>
+                      <td>${p.title}</td>
+                      <td>${p.views.toLocaleString()}</td>
+                      <td>${p.uniqueViews.toLocaleString()}</td>
+                      <td>${p.avgTime}s</td>
+                    </tr>
+                  `).join('') || '<tr><td colspan="5" class="loading">No data</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
+        }
+      }
+      
+      loadUser();
+      loadSites();
+    </script>
+  </body>
+</html>
