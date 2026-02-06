@@ -1,31 +1,40 @@
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const DB_PATH = join(__dirname, '../../pulse.db');
 
-let db;
+let db = null;
 
-export function getDatabase() {
+export async function getDatabase() {
   if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
+    const SQL = await initSqlJs();
+    
+    // Try to load existing database
+    try {
+      if (fs.existsSync(DB_PATH)) {
+        const buffer = fs.readFileSync(DB_PATH);
+        db = new SQL.Database(buffer);
+      } else {
+        db = new SQL.Database();
+      }
+    } catch (error) {
+      console.error('Error loading database:', error);
+      db = new SQL.Database();
+    }
   }
   return db;
 }
 
 export async function initDatabase() {
-  const database = getDatabase();
+  const database = await getDatabase();
   
-  // Enable foreign keys
-  database.pragma('foreign_keys = ON');
-
   // Create tables
-  database.exec(`
-    -- Users table (for OAuth)
+  database.run(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
@@ -33,9 +42,10 @@ export async function initDatabase() {
       picture TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+    )
+  `);
 
-    -- Sites table
+  database.run(`
     CREATE TABLE IF NOT EXISTS sites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,
@@ -46,19 +56,20 @@ export async function initDatabase() {
       category TEXT DEFAULT 'client',
       settings TEXT DEFAULT '{}',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    );
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-    -- Search Console sites
+  database.run(`
     CREATE TABLE IF NOT EXISTS searchconsole_sites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       site_url TEXT UNIQUE NOT NULL,
       permission_level TEXT,
       added_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+    )
+  `);
 
-    -- Analytics properties
+  database.run(`
     CREATE TABLE IF NOT EXISTS analytics_properties (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       property_id TEXT UNIQUE NOT NULL,
@@ -66,9 +77,10 @@ export async function initDatabase() {
       account_name TEXT,
       account_type TEXT DEFAULT 'silvertubes',
       added_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+    )
+  `);
 
-    -- Analytics data cache
+  database.run(`
     CREATE TABLE IF NOT EXISTS analytics_cache (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       site_id INTEGER NOT NULL,
@@ -78,12 +90,11 @@ export async function initDatabase() {
       pageviews INTEGER DEFAULT 0,
       bounces INTEGER DEFAULT 0,
       avg_session_duration REAL DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (site_id) REFERENCES sites(id),
-      UNIQUE(site_id, date)
-    );
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-    -- Search Console data cache
+  database.run(`
     CREATE TABLE IF NOT EXISTS searchconsole_cache (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       site_url TEXT NOT NULL,
@@ -93,67 +104,111 @@ export async function initDatabase() {
       impressions INTEGER DEFAULT 0,
       ctr REAL DEFAULT 0,
       position REAL DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (site_url) REFERENCES searchconsole_sites(site_url),
-      UNIQUE(site_url, date, query)
-    );
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-    -- AI Insights cache
+  database.run(`
     CREATE TABLE IF NOT EXISTS ai_insights (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       site_id INTEGER NOT NULL,
       analysis_type TEXT NOT NULL,
       content TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (site_id) REFERENCES sites(id)
-    );
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-    -- Dashboard settings
+  database.run(`
     CREATE TABLE IF NOT EXISTS dashboard_settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,
       settings TEXT DEFAULT '{}',
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    );
-
-    -- Create indexes for better performance
-    CREATE INDEX IF NOT EXISTS idx_analytics_cache_date ON analytics_cache(date);
-    CREATE INDEX IF NOT EXISTS idx_analytics_cache_site ON analytics_cache(site_id);
-    CREATE INDEX IF NOT EXISTS idx_searchcache_date ON searchconsole_cache(date);
-    CREATE INDEX IF NOT EXISTS idx_searchcache_site ON searchconsole_cache(site_url);
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
   `);
 
-  console.log('✅ Database schema created');
+  // Save database
+  saveDatabase();
+  
+  console.log('✅ Database initialized with sql.js');
   return database;
 }
 
-// Database utilities
-export function runQuery(sql, params = []) {
-  const database = getDatabase();
-  return database.prepare(sql).run(...params);
+export function saveDatabase() {
+  if (db) {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(DB_PATH, buffer);
+  }
 }
 
-export function getQuery(sql, params = []) {
+// Query helpers
+export function run(sql, params = []) {
   const database = getDatabase();
-  return database.prepare(sql).get(...params);
+  try {
+    database.run(sql, params);
+    saveDatabase();
+    return { changes: database.getRowsModified() };
+  } catch (error) {
+    console.error('Run error:', sql, error);
+    throw error;
+  }
 }
 
-export function allQuery(sql, params = []) {
+export function get(sql, params = []) {
   const database = getDatabase();
-  return database.prepare(sql).all(...params);
+  try {
+    const stmt = database.prepare(sql);
+    stmt.bind(params);
+    if (stmt.step()) {
+      const row = stmt.getAsObject();
+      stmt.free();
+      return row;
+    }
+    stmt.free();
+    return null;
+  } catch (error) {
+    console.error('Get error:', sql, error);
+    throw error;
+  }
+}
+
+export function all(sql, params = []) {
+  const database = getDatabase();
+  try {
+    const results = [];
+    const stmt = database.prepare(sql);
+    stmt.bind(params);
+    while (stmt.step()) {
+      results.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return results;
+  } catch (error) {
+    console.error('All error:', sql, error);
+    throw error;
+  }
 }
 
 export function transaction(callback) {
   const database = getDatabase();
-  return database.transaction(callback);
+  database.run('BEGIN TRANSACTION');
+  try {
+    callback();
+    database.run('COMMIT');
+    saveDatabase();
+  } catch (error) {
+    database.run('ROLLBACK');
+    throw error;
+  }
 }
 
 export default {
   getDatabase,
   initDatabase,
-  runQuery,
-  getQuery,
-  allQuery,
-  transaction
+  run,
+  get,
+  all,
+  transaction,
+  saveDatabase
 };

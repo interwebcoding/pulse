@@ -1,6 +1,6 @@
 import express from 'express';
 import passport from 'passport';
-import { getQuery, runQuery, allQuery } from '../models/database.js';
+import { get, run, all } from '../models/database.js';
 
 const router = express.Router();
 
@@ -32,7 +32,6 @@ router.get('/google',
 router.get('/google/callback',
   passport.authenticate('google', { failureRedirect: '/auth/google' }),
   (req, res) => {
-    // Redirect to frontend after successful auth
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     res.redirect(`${frontendUrl}/dashboard`);
   }
@@ -55,9 +54,9 @@ router.get('/settings', (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   
-  const settings = getQuery(
+  const settings = get(
     'SELECT settings FROM dashboard_settings WHERE user_id = ?',
-    [req.user.id]
+    [req.user?.id]
   );
   
   res.json({ 
@@ -73,20 +72,20 @@ router.post('/settings', (req, res) => {
   
   const { settings } = req.body;
   
-  const existing = getQuery(
+  const existing = get(
     'SELECT * FROM dashboard_settings WHERE user_id = ?',
-    [req.user.id]
+    [req.user?.id]
   );
   
   if (existing) {
-    runQuery(
-      'UPDATE dashboard_settings SET settings = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-      [JSON.stringify(settings), req.user.id]
+    run(
+      'UPDATE dashboard_settings SET settings = ? WHERE user_id = ?',
+      [JSON.stringify(settings), req.user?.id]
     );
   } else {
-    runQuery(
+    run(
       'INSERT INTO dashboard_settings (user_id, settings) VALUES (?, ?)',
-      [req.user.id, JSON.stringify(settings)]
+      [req.user?.id, JSON.stringify(settings)]
     );
   }
   

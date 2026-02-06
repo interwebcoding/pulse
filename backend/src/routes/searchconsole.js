@@ -1,12 +1,12 @@
 import express from 'express';
-import { allQuery, getQuery, runQuery } from '../models/database.js';
+import { all, get, run } from '../models/database.js';
 
 const router = express.Router();
 
 // Get all Search Console sites
 router.get('/sites', async (req, res) => {
   try {
-    const sites = allQuery('SELECT * FROM searchconsole_sites ORDER BY site_url');
+    const sites = all('SELECT * FROM searchconsole_sites ORDER BY site_url');
     res.json({ sites });
   } catch (error) {
     console.error('Error fetching Search Console sites:', error);
@@ -41,7 +41,7 @@ router.get('/queries', async (req, res) => {
     query += ' GROUP BY query ORDER BY clicks DESC LIMIT ?';
     params.push(parseInt(limit));
     
-    const queries = allQuery(query, params);
+    const queries = all(query, params);
     
     res.json({ 
       data: queries,
@@ -76,12 +76,12 @@ router.get('/pages', async (req, res) => {
 // Get overview metrics
 router.get('/overview', async (req, res) => {
   try {
-    const sites = allQuery('SELECT * FROM searchconsole_sites');
+    const sites = all('SELECT * FROM searchconsole_sites');
     
     const overview = [];
     
     for (const site of sites) {
-      const totals = getQuery(`
+      const totals = get(`
         SELECT 
           SUM(clicks) as total_clicks,
           SUM(impressions) as total_impressions,
@@ -119,7 +119,7 @@ router.get('/trends', async (req, res) => {
       return res.status(400).json({ error: 'siteUrl required' });
     }
     
-    const trends = allQuery(`
+    const trends = all(`
       SELECT 
         date,
         SUM(clicks) as clicks,
@@ -148,12 +148,12 @@ router.post('/sites', async (req, res) => {
   try {
     const { siteUrl, permissionLevel } = req.body;
     
-    runQuery(`
+    run(`
       INSERT INTO searchconsole_sites (site_url, permission_level)
       VALUES (?, ?)
     `, [siteUrl, permissionLevel || 'siteOwner']);
     
-    const site = getQuery('SELECT * FROM searchconsole_sites WHERE site_url = ?', [siteUrl]);
+    const site = get('SELECT * FROM searchconsole_sites WHERE site_url = ?', [siteUrl]);
     
     res.status(201).json({ site });
   } catch (error) {
@@ -167,8 +167,8 @@ router.delete('/sites/:siteUrl', async (req, res) => {
   try {
     const { siteUrl } = req.params;
     
-    runQuery('DELETE FROM searchconsole_cache WHERE site_url = ?', [siteUrl]);
-    runQuery('DELETE FROM searchconsole_sites WHERE site_url = ?', [siteUrl]);
+    run('DELETE FROM searchconsole_cache WHERE site_url = ?', [siteUrl]);
+    run('DELETE FROM searchconsole_sites WHERE site_url = ?', [siteUrl]);
     
     res.json({ success: true });
   } catch (error) {

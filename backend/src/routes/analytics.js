@@ -1,6 +1,6 @@
 import express from 'express';
 import { google } from 'googleapis';
-import { allQuery, getQuery, runQuery } from '../models/database.js';
+import { all, get, run } from '../models/database.js';
 
 const router = express.Router();
 
@@ -27,14 +27,14 @@ router.get('/site/:siteId', async (req, res) => {
     const { siteId } = req.params;
     const { startDate, endDate, granularity = 'daily' } = req.query;
     
-    const site = getQuery('SELECT * FROM sites WHERE id = ?', [siteId]);
+    const site = get('SELECT * FROM sites WHERE id = ?', [siteId]);
     
     if (!site) {
       return res.status(404).json({ error: 'Site not found' });
     }
     
     // Check cache first
-    const cached = allQuery(`
+    const cached = all(`
       SELECT * FROM analytics_cache 
       WHERE site_id = ? 
       AND date BETWEEN ? AND ?
@@ -66,13 +66,13 @@ router.get('/site/:siteId', async (req, res) => {
 // Get overview metrics for all sites
 router.get('/overview', async (req, res) => {
   try {
-    const sites = allQuery('SELECT id, name, property_id FROM sites WHERE property_id IS NOT NULL');
+    const sites = all('SELECT id, name, property_id FROM sites WHERE property_id IS NOT NULL');
     
     const overview = [];
     
     for (const site of sites) {
       // Get latest cached data for each site
-      const latest = getQuery(`
+      const latest = get(`
         SELECT * FROM analytics_cache 
         WHERE site_id = ? 
         ORDER BY date DESC 
@@ -80,7 +80,7 @@ router.get('/overview', async (req, res) => {
       `, [site.id]);
       
       // Get aggregate stats
-      const stats = getQuery(`
+      const stats = get(`
         SELECT 
           SUM(active_users) as total_users,
           SUM(sessions) as total_sessions,
@@ -152,7 +152,7 @@ router.post('/refresh/:siteId', async (req, res) => {
   try {
     const { siteId } = req.params;
     
-    const site = getQuery('SELECT * FROM sites WHERE id = ?', [siteId]);
+    const site = get('SELECT * FROM sites WHERE id = ?', [siteId]);
     
     if (!site) {
       return res.status(404).json({ error: 'Site not found' });

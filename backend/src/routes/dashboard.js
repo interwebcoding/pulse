@@ -1,5 +1,5 @@
 import express from 'express';
-import { allQuery, getQuery } from '../models/database.js';
+import { all, get } from '../models/database.js';
 
 const router = express.Router();
 
@@ -7,11 +7,11 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     // Get site counts
-    const analyticsSites = allQuery('SELECT id, name, property_id FROM sites WHERE property_id IS NOT NULL');
-    const searchConsoleSites = allQuery('SELECT * FROM searchconsole_sites');
+    const analyticsSites = all('SELECT id, name, property_id FROM sites WHERE property_id IS NOT NULL');
+    const searchConsoleSites = all('SELECT * FROM searchconsole_sites');
     
     // Calculate totals from caches
-    const gaTotals = getQuery(`
+    const gaTotals = get(`
       SELECT 
         SUM(active_users) as total_users,
         SUM(sessions) as total_sessions,
@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
       FROM analytics_cache
     `);
     
-    const scTotals = getQuery(`
+    const scTotals = get(`
       SELECT 
         SUM(clicks) as total_clicks,
         SUM(impressions) as total_impressions
@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
     `);
     
     // Get recent activity
-    const recentSites = allQuery(`
+    const recentSites = all(`
       SELECT id, name, url, updated_at 
       FROM sites 
       ORDER BY updated_at DESC 
@@ -58,11 +58,11 @@ router.get('/', async (req, res) => {
 // Get health scores
 router.get('/health', async (req, res) => {
   try {
-    const sites = allQuery('SELECT id, name FROM sites');
+    const sites = all('SELECT id, name FROM sites');
     
     const healthScores = sites.map(site => {
       // Calculate health score based on available metrics
-      const gaStats = getQuery(`
+      const gaStats = get(`
         SELECT AVG(position) as avg_position 
         FROM searchconsole_cache 
         WHERE site_url LIKE ?
@@ -109,7 +109,7 @@ router.get('/quick-stats', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     
-    const stats = getQuery(`
+    const stats = get(`
       SELECT 
         (SELECT COUNT(*) FROM sites) as siteCount,
         (SELECT COUNT(*) FROM searchconsole_sites) as scSiteCount

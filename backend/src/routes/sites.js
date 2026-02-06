@@ -1,5 +1,5 @@
 import express from 'express';
-import { allQuery, runQuery, getQuery } from '../models/database.js';
+import { all, run, get } from '../models/database.js';
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ function requireAuth(req, res, next) {
 // Get all sites for user
 router.get('/', requireAuth, (req, res) => {
   try {
-    const sites = allQuery(`
+    const sites = all(`
       SELECT * FROM sites 
       WHERE user_id = ?
       ORDER BY created_at DESC
@@ -30,7 +30,7 @@ router.get('/', requireAuth, (req, res) => {
 // Get single site
 router.get('/:id', requireAuth, (req, res) => {
   try {
-    const site = getQuery(`
+    const site = get(`
       SELECT * FROM sites 
       WHERE id = ? AND user_id = ?
     `, [req.params.id, req.user.id]);
@@ -51,12 +51,12 @@ router.post('/', requireAuth, (req, res) => {
   try {
     const { name, url, property_id, account_type, category } = req.body;
     
-    const result = runQuery(`
+    const result = run(`
       INSERT INTO sites (user_id, name, url, property_id, account_type, category)
       VALUES (?, ?, ?, ?, ?, ?)
     `, [req.user.id, name, url, property_id, account_type || 'silvertubes', category || 'client']);
     
-    const site = getQuery('SELECT * FROM sites WHERE id = ?', [result.lastInsertRowid]);
+    const site = get('SELECT * FROM sites WHERE id = ?', [result.lastInsertRowid]);
     
     res.status(201).json({ site });
   } catch (error) {
@@ -70,13 +70,13 @@ router.put('/:id', requireAuth, (req, res) => {
   try {
     const { name, url, property_id, account_type, category, settings } = req.body;
     
-    runQuery(`
+    run(`
       UPDATE sites 
       SET name = ?, url = ?, property_id = ?, account_type = ?, category = ?, settings = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
     `, [name, url, property_id, account_type, category, JSON.stringify(settings || {}), req.params.id, req.user.id]);
     
-    const site = getQuery('SELECT * FROM sites WHERE id = ?', [req.params.id]);
+    const site = get('SELECT * FROM sites WHERE id = ?', [req.params.id]);
     
     res.json({ site });
   } catch (error) {
@@ -88,7 +88,7 @@ router.put('/:id', requireAuth, (req, res) => {
 // Delete site
 router.delete('/:id', requireAuth, (req, res) => {
   try {
-    const result = runQuery(`
+    const result = run(`
       DELETE FROM sites WHERE id = ? AND user_id = ?
     `, [req.params.id, req.user.id]);
     
@@ -106,7 +106,7 @@ router.delete('/:id', requireAuth, (req, res) => {
 // Get sites summary (for dashboard)
 router.get('/summary/all', requireAuth, (req, res) => {
   try {
-    const sites = allQuery(`
+    const sites = all(`
       SELECT id, name, url, category, account_type 
       FROM sites 
       WHERE user_id = ?

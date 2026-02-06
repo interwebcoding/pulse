@@ -1,21 +1,13 @@
+// Load environment variables FIRST
+import { config } from 'dotenv';
+config({ path: new URL('../../.env', import.meta.url).pathname });
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import session from 'express-session';
-import passport from 'passport';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
-
-import authRouter from './routes/auth.js';
-import sitesRouter from './routes/sites.js';
-import analyticsRouter from './routes/analytics.js';
-import searchconsoleRouter from './routes/searchconsole.js';
-import dashboardRouter from './routes/dashboard.js';
-import { initDatabase } from './models/database.js';
+import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,23 +31,21 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
+// Dynamic imports to avoid circular dependencies
+app.use('/api/auth', (await import('./routes/auth.js')).default);
+app.use('/api/sites', (await import('./routes/sites.js')).default);
+app.use('/api/analytics', (await import('./routes/analytics.js')).default);
+app.use('/api/searchconsole', (await import('./routes/searchconsole.js')).default);
+app.use('/api/dashboard', (await import('./routes/dashboard.js')).default);
+
 // Passport initialization
+const passport = (await import('./services/passport.js')).default;
 app.use(passport.initialize());
 app.use(passport.session());
-
-// Passport config
-import './services/passport.js';
-
-// API Routes
-app.use('/api/auth', authRouter);
-app.use('/api/sites', sitesRouter);
-app.use('/api/analytics', analyticsRouter);
-app.use('/api/searchconsole', searchconsoleRouter);
-app.use('/api/dashboard', dashboardRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -85,11 +75,10 @@ app.use((req, res) => {
 // Initialize database and start server
 async function start() {
   try {
-    // Initialize SQLite database
+    const { initDatabase } = await import('./models/database.js');
     await initDatabase();
     console.log('✅ Database initialized');
 
-    // Start server
     app.listen(PORT, () => {
       console.log(`🚀 pulse API running on port ${PORT}`);
       console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
