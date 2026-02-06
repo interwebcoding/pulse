@@ -3,6 +3,8 @@ import { get, run } from '../models/database.js';
 
 const router = express.Router();
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:9090';
+
 // Check authentication status
 router.get('/me', (req, res) => {
   try {
@@ -25,8 +27,6 @@ router.get('/me', (req, res) => {
 
 // Google OAuth login
 router.get('/google', (req, res) => {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-  
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     console.log('⚠️  Google OAuth not configured - using dev mode');
     res.json({
@@ -37,28 +37,24 @@ router.get('/google', (req, res) => {
     return;
   }
   
-  res.redirect(`${frontendUrl}/dashboard`);
+  res.redirect(`${FRONTEND_URL}/dashboard.html`);
 });
 
 // Google OAuth callback
 router.get('/google/callback', (req, res) => {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-  
   if (req.query.dev === 'true' || !process.env.GOOGLE_CLIENT_ID) {
-    res.redirect(`${frontendUrl}/dashboard?dev=true`);
+    res.redirect(`${FRONTEND_URL}/dashboard.html?dev=true`);
     return;
   }
   
-  res.redirect(`${frontendUrl}/dashboard`);
+  res.redirect(`${FRONTEND_URL}/dashboard.html`);
 });
 
 // Dev login - for testing without Google OAuth
 router.post('/dev-login', async (req, res) => {
   try {
     console.log('Dev login called');
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     
-    // Create or get dev user
     const existingUser = await get('SELECT * FROM users WHERE id = ?', ['dev-user-123']);
     
     if (!existingUser) {
@@ -68,14 +64,12 @@ router.post('/dev-login', async (req, res) => {
       `, ['dev-user-123', 'dev@example.com', 'Development User', null]);
     }
     
-    // Save user to session
     req.session.user = {
       id: 'dev-user-123',
       email: 'dev@example.com',
       name: 'Development User'
     };
     
-    // Force session save
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
@@ -83,12 +77,11 @@ router.post('/dev-login', async (req, res) => {
       }
       
       console.log('Dev login success - session ID:', req.session.id);
-      console.log('Session user:', req.session.user);
       
       res.json({ 
         success: true, 
         user: req.session.user,
-        redirect: `${frontendUrl}/dashboard`
+        redirect: `${FRONTEND_URL}/dashboard.html`
       });
     });
   } catch (error) {
