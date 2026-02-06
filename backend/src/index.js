@@ -16,12 +16,32 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-// Debug logging
-console.log(`Frontend URL: ${FRONTEND_URL}`);
+// Allow multiple origins for development
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:9090',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:9090'
+];
 
-// CORS with credentials
+// CORS with credentials - allow any localhost for dev
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Allow localhost origins
+    if (allowedOrigins.includes(origin) || origin.match(/http:\/\/localhost:\d+/)) {
+      return callback(null, true);
+    }
+    
+    // In development, allow any localhost
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -38,18 +58,16 @@ app.use(session({
   saveUninitialized: true,
   name: 'pulse.sid',
   cookie: {
-    secure: false, // Set to true in production with HTTPS
+    secure: false,
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax'
   }
 }));
 
-// Debug middleware to log sessions
+// Debug middleware
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  console.log(`  Session ID: ${req.session?.id}`);
-  console.log(`  Session user: ${JSON.stringify(req.session?.user)}`);
   next();
 });
 
@@ -60,7 +78,7 @@ app.use('/api/analytics', (await import('./routes/analytics.js')).default);
 app.use('/api/searchconsole', (await import('./routes/searchconsole.js')).default);
 app.use('/api/dashboard', (await import('./routes/dashboard.js')).default);
 
-// Health check - no auth required
+// Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -74,28 +92,24 @@ app.get('/api/debug/session', (req, res) => {
   res.json({
     sessionID: req.session?.id,
     session: req.session,
-    cookies: req.cookies,
-    signedCookies: req.signedCookies
+    cookies: req.cookies
   });
 });
 
-// Error handling middleware
+// Error handling
 app.use((err, req, res, next) => {
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS not allowed' });
+  }
   console.error('Error:', err);
-  res.status(err.status || 500).json({
-    error: {
-      message: err.message || 'Internal Server Error',
-      status: err.status || 500
-    }
-  });
+  res.status(500).json({ error: err.message });
 });
 
-// 404 handler
+// 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
 
-// Initialize database and start server
 async function start() {
   try {
     const { initDatabase } = await import('./models/database.js');
@@ -104,7 +118,7 @@ async function start() {
 
     app.listen(PORT, () => {
       console.log(`🚀 pulse API running on port ${PORT}`);
-      console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`   Frontend URL: ${FRONTEND_URL}`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
