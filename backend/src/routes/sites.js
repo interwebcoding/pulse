@@ -5,20 +5,23 @@ const router = express.Router();
 
 // Middleware to require auth
 function requireAuth(req, res, next) {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  const isAuthenticated = req.user || (req.session && req.session.user);
+  
+  if (!isAuthenticated) {
+    return res.status(401).json({ error: 'Unauthorized - Please log in' });
   }
   next();
 }
 
 // Get all sites for user
-router.get('/', requireAuth, (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
-    const sites = all(`
+    const userId = req.user?.id || req.session.user?.id;
+    const sites = await all(`
       SELECT * FROM sites 
       WHERE user_id = ?
       ORDER BY created_at DESC
-    `, [req.user.id]);
+    `, [userId]);
     
     res.json({ sites });
   } catch (error) {
@@ -28,12 +31,13 @@ router.get('/', requireAuth, (req, res) => {
 });
 
 // Get single site
-router.get('/:id', requireAuth, (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   try {
-    const site = get(`
+    const userId = req.user?.id || req.session.user?.id;
+    const site = await get(`
       SELECT * FROM sites 
       WHERE id = ? AND user_id = ?
-    `, [req.params.id, req.user.id]);
+    `, [req.params.id, userId]);
     
     if (!site) {
       return res.status(404).json({ error: 'Site not found' });
@@ -47,36 +51,45 @@ router.get('/:id', requireAuth, (req, res) => {
 });
 
 // Add new site
-router.post('/', requireAuth, (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
     const { name, url, property_id, account_type, category } = req.body;
+    const userId = req.user?.id || req.session.user?.id;
     
-    const result = run(`
+    console.log('Creating site with:', { userId, name, url, property_id, account_type, category });
+    
+    await run(`
       INSERT INTO sites (user_id, name, url, property_id, account_type, category)
       VALUES (?, ?, ?, ?, ?, ?)
-    `, [req.user.id, name, url, property_id, account_type || 'silvertubes', category || 'client']);
+    `, [userId, name, url, property_id, account_type || 'silvertubes', category || 'client']);
     
-    const site = get('SELECT * FROM sites WHERE id = ?', [result.lastInsertRowid]);
+    // Get the newly inserted site by user_id and name
+    const site = await get(`
+      SELECT * FROM sites 
+      WHERE user_id = ? AND name = ?
+    `, [userId, name]);
     
-    res.status(201).json({ site });
+    console.log('Created site:', site);
+    res.status(201).json({ site: site });
   } catch (error) {
     console.error('Error creating site:', error);
-    res.status(500).json({ error: 'Failed to create site' });
+    res.status(500).json({ error: 'Failed to create site: ' + error.message });
   }
 });
 
 // Update site
-router.put('/:id', requireAuth, (req, res) => {
+router.put('/:id', requireAuth, async (req, res) => {
   try {
     const { name, url, property_id, account_type, category, settings } = req.body;
+    const userId = req.user?.id || req.session.user?.id;
     
-    run(`
+    await run(`
       UPDATE sites 
       SET name = ?, url = ?, property_id = ?, account_type = ?, category = ?, settings = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
-    `, [name, url, property_id, account_type, category, JSON.stringify(settings || {}), req.params.id, req.user.id]);
+    `, [name, url, property_id, account_type, category, JSON.stringify(settings || {}), req.params.id, userId]);
     
-    const site = get('SELECT * FROM sites WHERE id = ?', [req.params.id]);
+    const site = await get('SELECT * FROM sites WHERE id = ?', [req.params.id]);
     
     res.json({ site });
   } catch (error) {
@@ -86,11 +99,13 @@ router.put('/:id', requireAuth, (req, res) => {
 });
 
 // Delete site
-router.delete('/:id', requireAuth, (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    const result = run(`
+    const userId = req.user?.id || req.session.user?.id;
+    
+    const result = await run(`
       DELETE FROM sites WHERE id = ? AND user_id = ?
-    `, [req.params.id, req.user.id]);
+    `, [req.params.id, userId]);
     
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Site not found' });
@@ -104,14 +119,15 @@ router.delete('/:id', requireAuth, (req, res) => {
 });
 
 // Get sites summary (for dashboard)
-router.get('/summary/all', requireAuth, (req, res) => {
+router.get('/summary/all', requireAuth, async (req, res) => {
   try {
-    const sites = all(`
+    const userId = req.user?.id || req.session.user?.id;
+    const sites = await all(`
       SELECT id, name, url, category, account_type 
       FROM sites 
       WHERE user_id = ?
       ORDER BY name
-    `, [req.user.id]);
+    `, [userId]);
     
     res.json({ sites });
   } catch (error) {

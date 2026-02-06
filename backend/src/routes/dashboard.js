@@ -6,33 +6,32 @@ const router = express.Router();
 // Get dashboard overview
 router.get('/', async (req, res) => {
   try {
-    // Get site counts
-    const analyticsSites = all('SELECT id, name, property_id FROM sites WHERE property_id IS NOT NULL');
-    const searchConsoleSites = all('SELECT * FROM searchconsole_sites');
+    const [analyticsSites, searchConsoleSites] = await Promise.all([
+      all('SELECT id, name, property_id FROM sites WHERE property_id IS NOT NULL'),
+      all('SELECT * FROM searchconsole_sites')
+    ]);
     
-    // Calculate totals from caches
-    const gaTotals = get(`
-      SELECT 
-        SUM(active_users) as total_users,
-        SUM(sessions) as total_sessions,
-        SUM(pageviews) as total_pageviews
-      FROM analytics_cache
-    `);
-    
-    const scTotals = get(`
-      SELECT 
-        SUM(clicks) as total_clicks,
-        SUM(impressions) as total_impressions
-      FROM searchconsole_cache
-    `);
-    
-    // Get recent activity
-    const recentSites = all(`
-      SELECT id, name, url, updated_at 
-      FROM sites 
-      ORDER BY updated_at DESC 
-      LIMIT 5
-    `);
+    const [gaTotals, scTotals, recentSites] = await Promise.all([
+      get(`
+        SELECT 
+          SUM(active_users) as total_users,
+          SUM(sessions) as total_sessions,
+          SUM(pageviews) as total_pageviews
+        FROM analytics_cache
+      `),
+      get(`
+        SELECT 
+          SUM(clicks) as total_clicks,
+          SUM(impressions) as total_impressions
+        FROM searchconsole_cache
+      `),
+      all(`
+        SELECT id, name, url, updated_at 
+        FROM sites 
+        ORDER BY updated_at DESC 
+        LIMIT 5
+      `)
+    ]);
     
     res.json({
       summary: {
@@ -58,11 +57,10 @@ router.get('/', async (req, res) => {
 // Get health scores
 router.get('/health', async (req, res) => {
   try {
-    const sites = all('SELECT id, name FROM sites');
+    const sites = await all('SELECT id, name FROM sites');
     
-    const healthScores = sites.map(site => {
-      // Calculate health score based on available metrics
-      const gaStats = get(`
+    const healthScores = await Promise.all(sites.map(async (site) => {
+      const gaStats = await get(`
         SELECT AVG(position) as avg_position 
         FROM searchconsole_cache 
         WHERE site_url LIKE ?
@@ -70,7 +68,6 @@ router.get('/health', async (req, res) => {
       
       const position = gaStats?.avg_position || 0;
       
-      // Simple health calculation
       let score = 100;
       if (position > 50) score -= 30;
       else if (position > 30) score -= 20;
@@ -82,7 +79,7 @@ router.get('/health', async (req, res) => {
         score: Math.max(0, Math.min(100, score)),
         status: score >= 70 ? 'good' : score >= 40 ? 'warning' : 'critical'
       };
-    });
+    }));
     
     res.json({ healthScores });
   } catch (error) {
@@ -94,10 +91,7 @@ router.get('/health', async (req, res) => {
 // Get alerts
 router.get('/alerts', async (req, res) => {
   try {
-    // Return mock alerts for now
-    res.json({
-      alerts: []
-    });
+    res.json({ alerts: [] });
   } catch (error) {
     console.error('Error fetching alerts:', error);
     res.status(500).json({ error: 'Failed to fetch alerts' });
@@ -107,9 +101,7 @@ router.get('/alerts', async (req, res) => {
 // Get quick stats for header
 router.get('/quick-stats', async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    
-    const stats = get(`
+    const stats = await get(`
       SELECT 
         (SELECT COUNT(*) FROM sites) as siteCount,
         (SELECT COUNT(*) FROM searchconsole_sites) as scSiteCount

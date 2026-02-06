@@ -1,6 +1,42 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+
+const API_URL = 'http://localhost:3000/api';
+
 export default function Login() {
-  const handleLogin = () => {
-    window.location.href = '/api/auth/google';
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+
+  const handleGoogleLogin = () => {
+    window.location.href = `${API_URL}/auth/google`;
+  };
+
+  const handleDevLogin = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      console.log('Attempting dev login...');
+      const response = await axios.post(`${API_URL}/auth/dev-login`, {}, {
+        withCredentials: true
+      });
+      
+      console.log('Dev login response:', response.data);
+      
+      if (response.data.success) {
+        // Redirect to dashboard
+        navigate('/dashboard');
+      } else {
+        setError('Login failed');
+      }
+    } catch (err) {
+      console.error('Dev login error:', err);
+      setError(err.response?.data?.error || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -20,8 +56,9 @@ export default function Login() {
           </p>
           
           <button
-            onClick={handleLogin}
-            className="btn btn-primary w-full flex items-center justify-center gap-3"
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="btn btn-primary w-full flex items-center justify-center gap-3 mb-4"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -41,8 +78,34 @@ export default function Login() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            Continue with Google
+            {loading ? 'Signing in...' : 'Continue with Google'}
           </button>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">or</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleDevLogin}
+            disabled={loading}
+            className="btn btn-secondary w-full flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            Development Login
+          </button>
+
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
         </div>
 
         <p className="text-center text-sm text-gray-400 mt-6">

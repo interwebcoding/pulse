@@ -9,25 +9,32 @@ const __dirname = dirname(__filename);
 const DB_PATH = join(__dirname, '../../pulse.db');
 
 let db = null;
+let sqlInstance = null;
 
-export async function getDatabase() {
-  if (!db) {
-    const SQL = await initSqlJs();
+// Initialize sql.js and database
+async function initSql() {
+  if (!sqlInstance) {
+    sqlInstance = await initSqlJs();
     
     // Try to load existing database
     try {
       if (fs.existsSync(DB_PATH)) {
         const buffer = fs.readFileSync(DB_PATH);
-        db = new SQL.Database(buffer);
+        db = new sqlInstance.Database(buffer);
       } else {
-        db = new SQL.Database();
+        db = new sqlInstance.Database();
       }
     } catch (error) {
       console.error('Error loading database:', error);
-      db = new SQL.Database();
+      db = new sqlInstance.Database();
     }
   }
-  return db;
+  return { sql: sqlInstance, database: db };
+}
+
+export async function getDatabase() {
+  const { database } = await initSql();
+  return database;
 }
 
 export async function initDatabase() {
@@ -128,13 +135,13 @@ export async function initDatabase() {
   `);
 
   // Save database
-  saveDatabase();
+  await saveDatabase();
   
   console.log('✅ Database initialized with sql.js');
   return database;
 }
 
-export function saveDatabase() {
+async function saveDatabase() {
   if (db) {
     const data = db.export();
     const buffer = Buffer.from(data);
@@ -142,21 +149,21 @@ export function saveDatabase() {
   }
 }
 
-// Query helpers
-export function run(sql, params = []) {
-  const database = getDatabase();
+export async function run(sql, params = []) {
+  const database = await getDatabase();
   try {
     database.run(sql, params);
-    saveDatabase();
-    return { changes: database.getRowsModified() };
+    const changes = database.getRowsModified();
+    await saveDatabase();
+    return { changes };
   } catch (error) {
     console.error('Run error:', sql, error);
     throw error;
   }
 }
 
-export function get(sql, params = []) {
-  const database = getDatabase();
+export async function get(sql, params = []) {
+  const database = await getDatabase();
   try {
     const stmt = database.prepare(sql);
     stmt.bind(params);
@@ -173,8 +180,8 @@ export function get(sql, params = []) {
   }
 }
 
-export function all(sql, params = []) {
-  const database = getDatabase();
+export async function all(sql, params = []) {
+  const database = await getDatabase();
   try {
     const results = [];
     const stmt = database.prepare(sql);
@@ -190,13 +197,13 @@ export function all(sql, params = []) {
   }
 }
 
-export function transaction(callback) {
-  const database = getDatabase();
+export async function transaction(callback) {
+  const database = await getDatabase();
   database.run('BEGIN TRANSACTION');
   try {
-    callback();
+    await callback();
     database.run('COMMIT');
-    saveDatabase();
+    await saveDatabase();
   } catch (error) {
     database.run('ROLLBACK');
     throw error;
