@@ -1,5 +1,6 @@
 import express from 'express';
-import { all, get, run } from '../models/database.js';
+import { all, get } from '../models/database.js';
+import scService from '../services/search-console.js';
 
 const router = express.Router();
 
@@ -17,30 +18,14 @@ router.get('/sites', async (req, res) => {
 // Get queries for a site
 router.get('/queries', async (req, res) => {
   try {
-    const { siteUrl, startDate, endDate, limit = 100 } = req.query;
+    const { siteUrl, startDate = '30daysAgo', endDate = 'today', limit = 20 } = req.query;
     
     if (!siteUrl) {
       return res.status(400).json({ error: 'siteUrl required' });
     }
     
-    let query = `
-      SELECT query, SUM(clicks) as clicks, SUM(impressions) as impressions, 
-             AVG(ctr) as ctr, AVG(position) as position
-      FROM searchconsole_cache 
-      WHERE site_url = ?
-    `;
-    
-    const params = [siteUrl];
-    
-    query += ' GROUP BY query ORDER BY clicks DESC LIMIT ?';
-    params.push(parseInt(limit));
-    
-    const queries = await all(query, params);
-    
-    res.json({ 
-      data: queries,
-      siteUrl
-    });
+    const queries = await scService.getTopQueries(siteUrl, parseInt(limit), startDate, endDate);
+    res.json(queries);
   } catch (error) {
     console.error('Error fetching queries:', error);
     res.status(500).json({ error: 'Failed to fetch queries' });
@@ -50,47 +35,48 @@ router.get('/queries', async (req, res) => {
 // Get pages for a site
 router.get('/pages', async (req, res) => {
   try {
-    const { siteUrl } = req.query;
+    const { siteUrl, startDate = '30daysAgo', endDate = 'today', limit = 10 } = req.query;
     
     if (!siteUrl) {
       return res.status(400).json({ error: 'siteUrl required' });
     }
     
-    res.json({
-      data: [],
-      siteUrl
-    });
+    const pages = await scService.getTopPages(siteUrl, parseInt(limit), startDate, endDate);
+    res.json(pages);
   } catch (error) {
     console.error('Error fetching pages:', error);
     res.status(500).json({ error: 'Failed to fetch pages' });
   }
 });
 
-// Get overview metrics
+// Get performance data
+router.get('/performance', async (req, res) => {
+  try {
+    const { siteUrl, startDate = '30daysAgo', endDate = 'today' } = req.query;
+    
+    if (!siteUrl) {
+      return res.status(400).json({ error: 'siteUrl required' });
+    }
+    
+    const performance = await scService.getPerformance(siteUrl, startDate, endDate);
+    res.json(performance);
+  } catch (error) {
+    console.error('Error fetching performance:', error);
+    res.status(500).json({ error: 'Failed to fetch performance data' });
+  }
+});
+
+// Get overview
 router.get('/overview', async (req, res) => {
   try {
     const sites = await all('SELECT * FROM searchconsole_sites');
     
     const overview = await Promise.all(sites.map(async (site) => {
-      const totals = await get(`
-        SELECT 
-          SUM(clicks) as total_clicks,
-          SUM(impressions) as total_impressions,
-          AVG(ctr) as avg_ctr,
-          AVG(position) as avg_position
-        FROM searchconsole_cache 
-        WHERE site_url = ?
-      `, [site.site_url]);
-      
+      const performance = await scService.getPerformance(site.site_url, '30daysAgo', 'today');
       return {
         site: site.site_url,
         permissionLevel: site.permission_level,
-        totals: totals || {
-          total_clicks: 0,
-          total_impressions: 0,
-          avg_ctr: 0,
-          avg_position: 0
-        }
+        ...performance.totals
       };
     }));
     
@@ -101,50 +87,17 @@ router.get('/overview', async (req, res) => {
   }
 });
 
-// Get ranking trends
-router.get('/trends', async (req, res) => {
-  try {
-    const { siteUrl, startDate, endDate } = req.query;
-    
-    if (!siteUrl) {
-      return res.status(400).json({ error: 'siteUrl required' });
-    }
-    
-    const trends = await all(`
-      SELECT 
-        date,
-        SUM(clicks) as clicks,
-        SUM(impressions) as impressions,
-        AVG(ctr) as ctr,
-        AVG(position) as position
-      FROM searchconsole_cache 
-      WHERE site_url = ?
-      GROUP BY date
-      ORDER BY date
-    `, [siteUrl]);
-    
-    res.json({ 
-      data: trends,
-      siteUrl
-    });
-  } catch (error) {
-    console.error('Error fetching trends:', error);
-    res.status(500).json({ error: 'Failed to fetch trends' });
-  }
-});
-
 // Add a Search Console site
 router.post('/sites', async (req, res) => {
   try {
     const { siteUrl, permissionLevel } = req.body;
     
     await run(`
-      INSERT INTO searchconsole_sites (site_url, permission_level)
+      INSERT OR REPLACE INTO searchconsole_sites (site_url, permission_level)
       VALUES (?, ?)
     `, [siteUrl, permissionLevel || 'siteOwner']);
     
     const site = await get('SELECT * FROM searchconsole_sites WHERE site_url = ?', [siteUrl]);
-    
     res.status(201).json({ site });
   } catch (error) {
     console.error('Error adding Search Console site:', error);
@@ -157,8 +110,8 @@ router.delete('/sites/:siteUrl', async (req, res) => {
   try {
     const { siteUrl } = req.params;
     
-    await run('DELETE FROM searchconsole_cache WHERE site_url = ?', [siteUrl]);
-    await run('DELETE FROM searchconsole_sites WHERE site_url = ?', [siteUrl]);
+    await run('DELETE FROM searchconsole_cache WHERE site_url = ?', [decodeURIComponent(siteUrl)]);
+    await run('DELETE FROM searchconsole_sites WHERE site_url = ?', [decodeURIComponent(siteUrl)]);
     
     res.json({ success: true });
   } catch (error) {
