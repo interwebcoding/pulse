@@ -100,6 +100,8 @@
       .site-item:hover { background: #f3f4f6; }
       .site-name { font-weight: 500; color: #111827; }
       .site-url { font-size: 13px; color: #6b7280; margin-top: 4px; }
+      .site-arrow { color: #9ca3af; }
+      
       .btn {
         display: inline-flex;
         align-items: center;
@@ -145,6 +147,58 @@
       .user-email { font-size: 12px; color: #6b7280; }
       .logout { margin-left: auto; color: #6b7280; text-decoration: none; font-size: 13px; }
       .logout:hover { color: #dc2626; }
+      
+      /* Chart placeholder */
+      .chart-container {
+        height: 200px;
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        padding: 20px 0;
+      }
+      .chart-bar {
+        flex: 1;
+        background: linear-gradient(to top, #0284c7, #38bdf8);
+        border-radius: 4px 4px 0 0;
+        min-height: 10px;
+        transition: all 0.3s;
+      }
+      .chart-bar:hover { opacity: 0.8; }
+      
+      /* Traffic sources */
+      .source-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .source-bar {
+        flex: 1;
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .source-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #0284c7, #38bdf8);
+        border-radius: 4px;
+      }
+      .source-label { width: 100px; font-size: 14px; color: #374151; }
+      .source-percent { width: 50px; text-align: right; font-size: 14px; font-weight: 500; color: #111827; }
+      
+      /* Loading */
+      .loading { text-align: center; padding: 40px; color: #6b7280; }
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #0284c7;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
@@ -155,7 +209,7 @@
       </div>
       
       <nav>
-        <a href="/" class="nav-item active">
+        <a href="/dashboard.html" class="nav-item active">
           <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
           Dashboard
         </a>
@@ -183,7 +237,7 @@
           <div class="user-name" id="userName">User</div>
           <div class="user-email" id="userEmail">user@example.com</div>
         </div>
-        <a href="/api/auth/logout" class="logout">Sign out</a>
+        <a href="http://localhost:3000/api/auth/logout" class="logout">Sign out</a>
       </div>
     </aside>
     
@@ -193,54 +247,54 @@
       
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-label">Total Users</div>
-          <div class="stat-value" id="totalUsers">0</div>
+          <div class="stat-label">Total Users (30 days)</div>
+          <div class="stat-value" id="totalUsers">-</div>
           <div class="stat-change positive">↑ 12% vs last period</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Sessions</div>
-          <div class="stat-value" id="totalSessions">0</div>
+          <div class="stat-label">Sessions (30 days)</div>
+          <div class="stat-value" id="totalSessions">-</div>
           <div class="stat-change positive">↑ 8% vs last period</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Search Clicks</div>
-          <div class="stat-value" id="totalClicks">0</div>
-          <div class="stat-change negative">↓ 5% vs last period</div>
+          <div class="stat-label">Page Views (30 days)</div>
+          <div class="stat-value" id="totalPageviews">-</div>
+          <div class="stat-change positive">↑ 15% vs last period</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Impressions</div>
-          <div class="stat-value" id="totalImpressions">0</div>
-          <div class="stat-change positive">↑ 15% vs last period</div>
+          <div class="stat-label">Avg. Session Duration</div>
+          <div class="stat-value" id="avgDuration">-</div>
+          <div class="stat-change positive">↑ 5% vs last period</div>
         </div>
       </div>
       
       <div class="grid-2">
         <div class="card">
           <div class="card-header">
-            <h2 class="card-title">Your Sites</h2>
-            <a href="/sites.html" class="card-link">View all →</a>
+            <h2 class="card-title">Traffic Overview (Last 7 Days)</h2>
           </div>
-          <div id="sitesList"></div>
+          <div class="chart-container" id="trafficChart">
+            <div class="loading"><div class="spinner"></div>Loading chart...</div>
+          </div>
         </div>
         
         <div class="card">
           <div class="card-header">
-            <h2 class="card-title">Quick Actions</h2>
+            <h2 class="card-title">Traffic Sources</h2>
           </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <a href="/sites.html" class="btn btn-outline" style="justify-content: center;">
-              + Add Site
-            </a>
-            <a href="/analytics.html" class="btn btn-outline" style="justify-content: center;">
-              📊 Analytics
-            </a>
-            <a href="/searchconsole.html" class="btn btn-outline" style="justify-content: center;">
-              🔍 Search Console
-            </a>
-            <a href="/settings.html" class="btn btn-outline" style="justify-content: center;">
-              ⚙️ Settings
-            </a>
+          <div id="trafficSources">
+            <div class="loading"><div class="spinner"></div>Loading sources...</div>
           </div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Your Sites</h2>
+          <a href="/sites.html" class="card-link">View all →</a>
+        </div>
+        <div id="sitesList">
+          <div class="loading"><div class="spinner"></div>Loading sites...</div>
         </div>
       </div>
     </main>
@@ -251,7 +305,7 @@
       async function loadDashboard() {
         try {
           // Load user info
-          const userRes = await fetch(`${API_URL}/auth/me`, { credentials: 'include' });
+          const userRes = await fetch(API_URL + '/auth/me', { credentials: 'include' });
           const userData = await userRes.json();
           
           if (!userData.authenticated) {
@@ -263,17 +317,44 @@
           document.getElementById('userEmail').textContent = userData.user.email;
           document.getElementById('avatar').textContent = userData.user.name?.[0] || 'U';
           
-          // Load dashboard data
-          const dashRes = await fetch(`${API_URL}/dashboard`, { credentials: 'include' });
+          // Load dashboard data with analytics
+          const dashRes = await fetch(API_URL + '/dashboard', { credentials: 'include' });
           const dashData = await dashRes.json();
           
-          document.getElementById('totalUsers').textContent = dashData.metrics?.users?.toLocaleString() || '0';
-          document.getElementById('totalSessions').textContent = dashData.metrics?.sessions?.toLocaleString() || '0';
-          document.getElementById('totalClicks').textContent = dashData.metrics?.clicks?.toLocaleString() || '0';
-          document.getElementById('totalImpressions').textContent = dashData.metrics?.impressions?.toLocaleString() || '0';
+          // Load analytics overview for real metrics
+          const analyticsRes = await fetch(API_URL + '/analytics/overview', { credentials: 'include' });
+          const analyticsData = await analyticsRes.json();
+          
+          // Aggregate totals from all sites
+          let totalUsers = 0, totalSessions = 0, totalPageviews = 0, totalDuration = 0;
+          let siteCount = 0;
+          
+          if (analyticsData.overview && analyticsData.overview.length > 0) {
+            analyticsData.overview.forEach(site => {
+              if (site.totals) {
+                totalUsers += site.totals.total_users || 0;
+                totalSessions += site.totals.total_sessions || 0;
+                totalPageviews += site.totals.total_pageviews || 0;
+                totalDuration += site.totals.avg_session_duration || 0;
+                siteCount++;
+              }
+            });
+          }
+          
+          document.getElementById('totalUsers').textContent = totalUsers.toLocaleString();
+          document.getElementById('totalSessions').textContent = totalSessions.toLocaleString();
+          document.getElementById('totalPageviews').textContent = totalPageviews.toLocaleString();
+          document.getElementById('avgDuration').textContent = Math.round(totalDuration / Math.max(siteCount, 1)) + 's';
+          
+          // Render chart
+          if (analyticsData.overview && analyticsData.overview.length > 0) {
+            renderChart(analyticsData.overview[0].dailyData || []);
+          } else {
+            renderChart([]);
+          }
           
           // Load sites
-          const sitesRes = await fetch(`${API_URL}/sites`, { credentials: 'include' });
+          const sitesRes = await fetch(API_URL + '/sites', { credentials: 'include' });
           const sitesData = await sitesRes.json();
           
           const sitesList = document.getElementById('sitesList');
@@ -284,15 +365,59 @@
                   <div class="site-name">${site.name}</div>
                   <div class="site-url">${site.url}</div>
                 </div>
-                <a href="/sites.html" style="color: #9ca3af; text-decoration: none;">→</a>
+                <a href="/sites.html" class="site-arrow">→</a>
               </div>
             `).join('');
           } else {
             sitesList.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 24px;">No sites yet</p>';
           }
+          
+          // Load traffic sources for first site
+          if (sitesData.sites && sitesData.sites.length > 0) {
+            loadTrafficSources(sitesData.sites[0].id);
+          }
         } catch (err) {
           console.error('Error loading dashboard:', err);
         }
+      }
+      
+      async function loadTrafficSources(siteId) {
+        try {
+          const sourcesRes = await fetch(API_URL + '/analytics/sources/' + siteId, { credentials: 'include' });
+          const sourcesData = await sourcesRes.json();
+          
+          if (sourcesData.data) {
+            const container = document.getElementById('trafficSources');
+            container.innerHTML = sourcesData.data.map(source => `
+              <div class="source-item">
+                <div class="source-label">${source.source} / ${source.medium}</div>
+                <div class="source-bar">
+                  <div class="source-fill" style="width: ${source.percentage}%"></div>
+                </div>
+                <div class="source-percent">${source.percentage}%</div>
+              </div>
+            `).join('');
+          }
+        } catch (err) {
+          console.error('Error loading sources:', err);
+        }
+      }
+      
+      function renderChart(dailyData) {
+        const container = document.getElementById('trafficChart');
+        
+        if (!dailyData || dailyData.length === 0) {
+          container.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 40px;">No data available. Add a site with GA4 property to see traffic.</p>';
+          return;
+        }
+        
+        // Get max value for scaling
+        const maxValue = Math.max(...dailyData.map(d => d.pageviews || 0));
+        
+        container.innerHTML = dailyData.map(day => {
+          const height = ((day.pageviews || 0) / maxValue * 100).toFixed(1);
+          return `<div class="chart-bar" style="height: ${height}%" title="${day.date}: ${day.pageviews} views"></div>`;
+        }).join('');
       }
       
       loadDashboard();
